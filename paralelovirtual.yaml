@@ -1,5 +1,5 @@
 blueprint:
-  name: Paralelo Virtual - Fernacom
+  name: Paralelo Virtual
   description: >
     Sincroniza dois ou mais switches/lights.
     Quando qualquer ponto for ligado, todos serão ligados.
