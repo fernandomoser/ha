@@ -1,0 +1,60 @@
+blueprint:
+  name: Paralelo Virtual - Fernacom
+  description: >
+    Sincroniza dois ou mais switches/lights.
+    Quando qualquer ponto for ligado, todos serão ligados.
+    Quando qualquer ponto for desligado, todos serão desligados.
+  domain: automation
+
+  input:
+    entrada_switchs:
+      name: Escolha os pontos de iluminação
+      description: >
+        Selecione dois ou mais switches/lights que deverão funcionar em paralelo.
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+          multiple: true
+
+trigger:
+  - platform: state
+    entity_id: !input entrada_switchs
+    to: "on"
+    id: ligar
+
+  - platform: state
+    entity_id: !input entrada_switchs
+    to: "off"
+    id: desligar
+
+condition: []
+
+action:
+  - choose:
+
+      # ============================================================
+      # LIGAR
+      # ============================================================
+      - conditions:
+          - condition: trigger
+            id: ligar
+        sequence:
+          - service: homeassistant.turn_on
+            target:
+              entity_id: !input entrada_switchs
+
+      # ============================================================
+      # DESLIGAR
+      # ============================================================
+      - conditions:
+          - condition: trigger
+            id: desligar
+        sequence:
+          - service: homeassistant.turn_off
+            target:
+              entity_id: !input entrada_switchs
+
+mode: restart
+max_exceeded: silent
