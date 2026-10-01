@@ -1,5 +1,5 @@
 blueprint:
-  name: Paralelo Virtual 3.0
+  name: Paralelo Virtual 3.0 
   description: >
     Cria um paralelo virtual entre um interruptor físico que controla
     a carga e uma ou mais teclas virtuais sem carga conectada.
