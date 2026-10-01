@@ -1,16 +1,19 @@
 blueprint:
-  name: Paralelo Virtual 3.0 
+  name: Paralelo Virtual 3.1
   description: >
     Cria um paralelo virtual entre um interruptor físico que controla
     a carga e uma ou mais teclas virtuais sem carga conectada.
 
-    A tecla virtual controla a carga física e o estado da carga física
-    é sincronizado com as teclas virtuais, com proteção contra
-    realimentação e loops.
+    As teclas virtuais controlam a carga física e o estado da carga
+    física é sincronizado com as teclas virtuais.
+
+    A proteção contra realimentação é feita verificando o estado
+    atual antes de enviar qualquer comando.
 
   domain: automation
 
   input:
+
     carga_principal:
       name: Interruptor da carga
       description: >
@@ -84,19 +87,12 @@ actions:
   - choose:
 
       # ========================================================
-      # TECLA VIRTUAL FOI LIGADA
-      #
-      # Só aceitamos como comando quando a mudança não foi
-      # provocada por outra automação/script.
+      # TECLA VIRTUAL → LIGAR CARGA
       # ========================================================
 
       - conditions:
           - condition: trigger
             id: virtual_on
-
-          - condition: template
-            value_template: >
-              {{ trigger.to_state.context.parent_id is none }}
 
         sequence:
 
@@ -112,16 +108,12 @@ actions:
 
 
       # ========================================================
-      # TECLA VIRTUAL FOI DESLIGADA
+      # TECLA VIRTUAL → DESLIGAR CARGA
       # ========================================================
 
       - conditions:
           - condition: trigger
             id: virtual_off
-
-          - condition: template
-            value_template: >
-              {{ trigger.to_state.context.parent_id is none }}
 
         sequence:
 
@@ -137,9 +129,7 @@ actions:
 
 
       # ========================================================
-      # CARGA FÍSICA FOI LIGADA
-      #
-      # Sincroniza as teclas virtuais.
+      # CARGA LIGOU → SINCRONIZAR TECLAS VIRTUAIS
       # ========================================================
 
       - conditions:
@@ -164,9 +154,7 @@ actions:
 
 
       # ========================================================
-      # CARGA FÍSICA FOI DESLIGADA
-      #
-      # Sincroniza as teclas virtuais.
+      # CARGA DESLIGOU → SINCRONIZAR TECLAS VIRTUAIS
       # ========================================================
 
       - conditions:
