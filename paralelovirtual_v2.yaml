@@ -1,16 +1,32 @@
 blueprint:
   name: Paralelo Virtual
   description: >
-    Sincroniza dois ou mais switches/lights.
-    Quando qualquer ponto for ligado, todos serão ligados.
-    Quando qualquer ponto for desligado, todos serão desligados.
+    Cria um paralelo virtual entre um interruptor físico que controla
+    a carga e uma ou mais teclas virtuais sem carga conectada.
+
+    A tecla virtual controla a carga física e o estado da carga física
+    é sincronizado com as teclas virtuais, com proteção contra
+    realimentação e loops.
+
   domain: automation
 
   input:
-    entrada_switchs:
-      name: Escolha os pontos de iluminação
+    carga_principal:
+      name: Interruptor da carga
       description: >
-        Selecione dois ou mais switches/lights que deverão funcionar em paralelo.
+        Selecione o switch/light fisicamente ligado à lâmpada.
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+          multiple: false
+
+    teclas_virtuais:
+      name: Teclas virtuais
+      description: >
+        Selecione uma ou mais teclas sem carga física que funcionarão
+        como interruptores paralelos.
       selector:
         entity:
           domain:
@@ -18,43 +34,162 @@ blueprint:
             - light
           multiple: true
 
-trigger:
-  - platform: state
-    entity_id: !input entrada_switchs
+
+variables:
+  carga: !input carga_principal
+  virtuais: !input teclas_virtuais
+
+
+triggers:
+
+  # ============================================================
+  # CARGA FÍSICA
+  # ============================================================
+
+  - trigger: state
+    entity_id: !input carga_principal
+    from: "off"
     to: "on"
-    id: ligar
+    id: carga_on
 
-  - platform: state
-    entity_id: !input entrada_switchs
+  - trigger: state
+    entity_id: !input carga_principal
+    from: "on"
     to: "off"
-    id: desligar
+    id: carga_off
 
-condition: []
 
-action:
+  # ============================================================
+  # TECLAS VIRTUAIS
+  # ============================================================
+
+  - trigger: state
+    entity_id: !input teclas_virtuais
+    from: "off"
+    to: "on"
+    id: virtual_on
+
+  - trigger: state
+    entity_id: !input teclas_virtuais
+    from: "on"
+    to: "off"
+    id: virtual_off
+
+
+conditions: []
+
+
+actions:
+
   - choose:
 
-      # ============================================================
-      # LIGAR
-      # ============================================================
+      # ========================================================
+      # TECLA VIRTUAL FOI LIGADA
+      #
+      # Só aceitamos como comando quando a mudança não foi
+      # provocada por outra automação/script.
+      # ========================================================
+
       - conditions:
           - condition: trigger
-            id: ligar
-        sequence:
-          - service: homeassistant.turn_on
-            target:
-              entity_id: !input entrada_switchs
+            id: virtual_on
 
-      # ============================================================
-      # DESLIGAR
-      # ============================================================
+          - condition: template
+            value_template: >
+              {{ trigger.to_state.context.parent_id is none }}
+
+        sequence:
+
+          - if:
+              - condition: template
+                value_template: >
+                  {{ states(carga) != 'on' }}
+
+            then:
+              - action: homeassistant.turn_on
+                target:
+                  entity_id: !input carga_principal
+
+
+      # ========================================================
+      # TECLA VIRTUAL FOI DESLIGADA
+      # ========================================================
+
       - conditions:
           - condition: trigger
-            id: desligar
-        sequence:
-          - service: homeassistant.turn_off
-            target:
-              entity_id: !input entrada_switchs
+            id: virtual_off
 
-mode: restart
+          - condition: template
+            value_template: >
+              {{ trigger.to_state.context.parent_id is none }}
+
+        sequence:
+
+          - if:
+              - condition: template
+                value_template: >
+                  {{ states(carga) != 'off' }}
+
+            then:
+              - action: homeassistant.turn_off
+                target:
+                  entity_id: !input carga_principal
+
+
+      # ========================================================
+      # CARGA FÍSICA FOI LIGADA
+      #
+      # Sincroniza as teclas virtuais.
+      # ========================================================
+
+      - conditions:
+          - condition: trigger
+            id: carga_on
+
+        sequence:
+
+          - repeat:
+              for_each: "{{ virtuais }}"
+              sequence:
+
+                - if:
+                    - condition: template
+                      value_template: >
+                        {{ states(repeat.item) != 'on' }}
+
+                  then:
+                    - action: homeassistant.turn_on
+                      target:
+                        entity_id: "{{ repeat.item }}"
+
+
+      # ========================================================
+      # CARGA FÍSICA FOI DESLIGADA
+      #
+      # Sincroniza as teclas virtuais.
+      # ========================================================
+
+      - conditions:
+          - condition: trigger
+            id: carga_off
+
+        sequence:
+
+          - repeat:
+              for_each: "{{ virtuais }}"
+              sequence:
+
+                - if:
+                    - condition: template
+                      value_template: >
+                        {{ states(repeat.item) != 'off' }}
+
+                  then:
+                    - action: homeassistant.turn_off
+                      target:
+                        entity_id: "{{ repeat.item }}"
+
+
+mode: queued
+max: 10
 max_exceeded: silent
