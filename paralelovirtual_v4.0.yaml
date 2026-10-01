@@ -1,0 +1,133 @@
+blueprint:
+  name: Paralelo Virtual
+  description: >
+    Sincroniza dois ou mais switches/lights como um interruptor paralelo.
+
+    Quando qualquer entidade selecionada for ligada, as demais serão ligadas.
+    Quando qualquer entidade selecionada for desligada, as demais serão desligadas.
+
+    A entidade que originou a alteração não recebe comando de volta.
+    As entidades que já estiverem no estado desejado também não recebem
+    um novo comando, reduzindo realimentação e loops.
+
+  domain: automation
+
+  input:
+    entrada_switchs:
+      name: Escolha os pontos de iluminação
+      description: >
+        Selecione os switches/lights que deverão funcionar em paralelo.
+      selector:
+        entity:
+          domain:
+            - switch
+            - light
+          multiple: true
+
+
+variables:
+  entidades: !input entrada_switchs
+
+
+triggers:
+
+  # ============================================================
+  # ALGUMA ENTIDADE FOI LIGADA
+  # ============================================================
+
+  - trigger: state
+    entity_id: !input entrada_switchs
+    from: "off"
+    to: "on"
+    id: ligar
+
+
+  # ============================================================
+  # ALGUMA ENTIDADE FOI DESLIGADA
+  # ============================================================
+
+  - trigger: state
+    entity_id: !input entrada_switchs
+    from: "on"
+    to: "off"
+    id: desligar
+
+
+conditions: []
+
+
+actions:
+
+  # ============================================================
+  # GUARDA QUAL ENTIDADE ORIGINOU O EVENTO
+  # ============================================================
+
+  - variables:
+      origem: "{{ trigger.entity_id }}"
+      estado_desejado: "{{ trigger.to_state.state }}"
+
+
+  # ============================================================
+  # PERCORRE TODAS AS ENTIDADES DO PARALELO
+  # ============================================================
+
+  - repeat:
+      for_each: "{{ entidades }}"
+
+      sequence:
+
+        # --------------------------------------------------------
+        # NÃO COMANDA A ENTIDADE QUE ORIGINOU O EVENTO
+        # --------------------------------------------------------
+
+        - condition: template
+          value_template: >
+            {{ repeat.item != origem }}
+
+
+        # --------------------------------------------------------
+        # SOMENTE COMANDA SE ESTIVER EM ESTADO DIFERENTE
+        # --------------------------------------------------------
+
+        - condition: template
+          value_template: >
+            {{ states(repeat.item) != estado_desejado }}
+
+
+        # --------------------------------------------------------
+        # LIGAR
+        # --------------------------------------------------------
+
+        - choose:
+
+            - conditions:
+                - condition: template
+                  value_template: >
+                    {{ estado_desejado == 'on' }}
+
+              sequence:
+
+                - action: homeassistant.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+
+
+            # ----------------------------------------------------
+            # DESLIGAR
+            # ----------------------------------------------------
+
+            - conditions:
+                - condition: template
+                  value_template: >
+                    {{ estado_desejado == 'off' }}
+
+              sequence:
+
+                - action: homeassistant.turn_off
+                  target:
+                    entity_id: "{{ repeat.item }}"
+
+
+mode: queued
+max: 10
+max_exceeded: silent
